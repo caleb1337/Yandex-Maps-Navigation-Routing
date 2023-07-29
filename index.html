@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset='UTF-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Index</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=ENTER_YOUR_APIKEY_HERE&lang=ru_RU"
+        type="text/javascript">
+        </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
+        crossorigin="anonymous"></script>
+    <style>
+
+        #map {
+            height: 100vh;
+
+        }
+    </style>
+
+</head>
+
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-4">
+            <form id="data-form"></form>
+                <div class="mb-3">
+                    <label for="first-point" class="form-label">Введите начало</label>
+                    <input type="text" class="form-control" id="first-point" value="Москва">
+                </div>
+
+                <div class="mb-3">
+                    <label for="second-point" class="form-label">Введите конец</label>
+                    <input type="text" class="form-control" id="second-point" value="Аксай">
+                </div>
+                <div class="mb-3 container-points"></div>
+
+                <!-- <button type="submit" class="btn btn-secondary disabled" id="submit-btn">Получить гео</button> -->
+                <button class="btn btn-primary" id="route-btn">Построить маршрут</button>
+                <button class="btn btn-primary" id="addPoint-btn">Добавить точку</button>
+                <button class="btn btn-warning" id="clear-btn">Очистить карту</button>
+<!--             <button value="Включить редактор маршрута" class="btn btn-success mt-1" id="editor" name="start">Включить редактор маршрута</button>-->
+
+            </form>
+            <div class="output mt-3"></div>
+        </div>
+            <div id="map" class="col-8 p-0"></div>
+            
+        </div>
+    </div>
+
+    <script type="module">
+        import addAdditionalPoint from './addAdditionalPoint.js';
+
+        ymaps.ready(init);
+        function init() {
+
+            const suggestView1 = new ymaps.SuggestView('first-point');
+            const suggestView2 = new ymaps.SuggestView('second-point');
+            const start = document.querySelector('#first-point');
+            const end = document.querySelector('#second-point');
+            const form = document.querySelector('#data-form');
+            const clearBtn = document.querySelector('#clear-btn');
+            const routeBtn = document.querySelector('#route-btn');
+            const apiKey = '780081e6-43fd-48ee-a7e1-30a03e86ab97';
+            const output = document.querySelector('.output');
+
+            const myMap = new ymaps.Map("map", {
+                center: [47.30316352066171, 39.9357750902329],
+                zoom: 7
+            }, {
+                searchControlProvider: 'yandex#search',
+            });
+
+            // form.addEventListener('submit', multiRouter);
+            // form.addEventListener('submit', getValues);
+            // routeBtn.addEventListener('click', multiRouter);
+            routeBtn.addEventListener('click', multiRouter);
+            clearBtn.addEventListener('click', clearMap);
+            addAdditionalPoint();
+
+            function getAdtPointsValues(){
+                let stack = [];
+                let points = document.querySelectorAll('.adt-point');
+                points.forEach(item =>{
+                    return stack.push(item.value);
+                })
+                return stack;
+            }
+
+            function clearMap() {
+                output.innerHTML = '';
+                return myMap.geoObjects.removeAll();
+                    
+                
+            }
+
+            function multiRouter(e){
+                clearMap()
+                output.innerHTML ='';
+                let adtPoints = getAdtPointsValues();
+                let prepared = [];
+                if(adtPoints == 0) prepared = [start.value, end.value];
+                // Подготавливаем массив с точками
+                else{
+                adtPoints.forEach(item =>{
+                    prepared.push(item)
+                })
+                prepared.unshift(start.value)
+                prepared.push(end.value);
+                }
+
+                
+                let multiRoute = new ymaps.multiRouter.MultiRoute({
+                    referencePoints: prepared,
+                    // params: {avoidTrafficeJams: true}
+                }, {
+                    boundsAutoApply: true
+                });
+                myMap.geoObjects.add(multiRoute);
+
+                //Получаем данные об активном маршруте
+                multiRoute.model.events.add('requestsuccess',function(){
+                    let activeRoute = multiRoute.getActiveRoute();
+                    output.insertAdjacentHTML("afterbegin",`<p>Длина: ${activeRoute.properties.get("distance").text}</p><p>Время прохождения: ${activeRoute.properties.get("duration").text}</p>`)
+                    // console.log("Длина: " + activeRoute.properties.get("distance").text);
+                    // console.log("Время прохождения: " + activeRoute.properties.get("duration").text);
+                    // Для автомобильных маршрутов можно вывести 
+                    // информацию о перекрытых участках.
+                    if (activeRoute.properties.get("blocked")) {
+                        console.log("На маршруте имеются участки с перекрытыми дорогами.");
+                    }
+                });
+                
+            }
+
+
+
+            function createRoute(e) {
+                e.preventDefault();
+                console.log(e.target);
+                if (e.target.matches('#route-btn')) {
+                    let startEditing = false;
+                    let button = document.querySelector('#editor');
+                    let startValue = start.value,
+                        endValue = end.value;
+                    console.log(startValue, endValue);
+
+                    ymaps.route([startValue, endValue], { mapStateAutoApply: true })
+
+                        .then(function (route) {
+                            console.log(route);
+                            myMap.geoObjects.add(route);
+                            button.onclick = function () {
+                                if (startEditing = !startEditing) {
+                                    // Включаем редактор.
+                                    route.editor.start({ addWayPoints: true, removeWayPoints: true });
+                                    this.textContent = 'Отключить редактор маршрута';
+                                } else {
+                                    // Выключаем редактор.
+                                    route.editor.stop();
+                                    this.textContent = 'Включить редактор маршрута';
+                                }
+                            };
+                            route.editor.events.add(["waypointadd", "waypointremove", "start"], function () {
+                                if (route.getWayPoints().getLength() >= 10) {
+                                    // Если на карте больше 9 точек маршрута, отключаем добавление новых точек.
+                                    route.editor.start({ addWayPoints: false, removeWayPoints: true });
+                                }
+                                else {
+                                    // Включаем добавление новых точек.
+                                    route.editor.start({ addWayPoints: true, removeWayPoints: true });
+                                }
+                            })
+                        }, function (error) {
+                            alert("Возникла ошибка: " + error.message);
+                        });
+                }
+            }
+        }
+
+
+
+
+    </script>
+</body>
+
+</html>
